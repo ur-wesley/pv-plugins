@@ -233,8 +233,8 @@ export type VaultUI = {
     show_input_box: (options: InputBoxOptions) -> string?,
     --- Renders a searchable Quick Pick list. Returns the selected item id or nil if cancelled.
     show_quick_pick: (options: QuickPickOptions) -> string?,
-    --- Renders a beautiful multi-input form dialog. Returns a key-value dictionary of values, or nil if cancelled.
-    show_form: (options: FormOptions) -> { [string]: string }?,
+    --- Renders a multi-input form dialog. Returns a table of { field_id = value } or nil if cancelled.
+    show_form: (options: FormOptions) -> { [string]: any }?,
     --- Navigates the UI to a project, opening a specific file and line.
     open_project_file: (projectId: string, filePath: string, line: number?) -> (),
     --- Creates or updates a persistent segment in the app footer/status bar.
@@ -242,8 +242,6 @@ export type VaultUI = {
     set_footer: (options: FooterSegmentOptions) -> (),
     --- Removes a footer segment by its id.
     clear_footer: (id: string) -> (),
-    --- Renders a custom form with input validation. Returns a table of { field_id = value } or nil if cancelled.
-    show_form: (options: FormOptions) -> { [string]: any }?,
     --- Adds or updates a widget in the project detail header.
     set_header_widget: (options: HeaderWidgetOptions) -> (),
     --- Removes a widget from the project detail header by its id.
