@@ -1,6 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
-local vault = require("../vault")
+local vault = require("vault")
 
 type FileItem = {
 	projectId: string,
@@ -21,6 +20,8 @@ type PluginCommandContext = {
 }
 
 local plugin = {
+	lazy = true,
+	cmd = { "find_files" },
 	name = "Fuzzy Finder (fzf)",
 	description = "Fuzzy find files across all projects in the library.",
 	version = "1.0.1",

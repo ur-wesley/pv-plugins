@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 
 
@@ -26,6 +24,9 @@ local plugin = {
     description = "Supercharge your project navigation! Mark up to 4 projects and jump between them instantly.",
     version = "1.0.0",
     category = "utility",
+    lazy = true,
+    cmd = { "mark_project", "quick_menu", "jump_1", "jump_2", "jump_3", "jump_4", "clear_harpoon" },
+    event = { "project_focus", "startup" },
     locales = {
         en = {
             name = "Project Harpoon",

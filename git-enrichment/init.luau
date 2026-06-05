@@ -1,5 +1,5 @@
 --!strict
-local vault = require("../vault")
+local vault = require("vault")
 
 type PluginCommandContext = {
     projectId: string?,
@@ -16,6 +16,8 @@ type GitStatus = {
 }
 
 local plugin = {
+    lazy = true,
+    cmd = { "pull", "show_settings" },
     name = "Git Enrichment",
     description = "Enriches your workspace with branch info, git pull actions, settings forms, and file/task status decorations.",
     version = "1.0.0",

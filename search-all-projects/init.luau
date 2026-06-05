@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 type SearchResult = {
 	projectId: string,
@@ -22,6 +20,8 @@ type PluginCommandContext = {
 }
 
 local plugin = {
+	lazy = true,
+	cmd = { "search_all" },
 	name = "Search All Projects",
 	description = "Searches through all files of all projects in the library for a given term.",
 	version = "1.0.0",

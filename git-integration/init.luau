@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 type PluginCommandContext = {
     projectId: string?
@@ -26,6 +24,8 @@ type GitStatus = {
 }
 
 local plugin = {
+    lazy = true,
+    cmd = { "view_commits", "switch_branch" },
     name = "Git Integration",
     description = "View repository commits and track status directly inside your launcher.",
     version = "1.0.0",

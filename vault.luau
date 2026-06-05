@@ -1,7 +1,7 @@
 --!strict
 -- vault.luau — Vault Engine API type definitions
 -- This module is pre-loaded by the Rust engine and available as `vault` global.
--- Plugins obtain it via: local vault = (require :: any)("vault") :: Vault
+-- Plugins obtain it via: local vault = require("vault")
 -- Type definitions here are consumed by the Luau type checker and IDE language servers.
 
 -- ─── Sub-module types ────────────────────────────────────────────────────────
@@ -190,33 +190,11 @@ export type GitStatus = {
     version: string?,
 }
 
-export type VaultGit = {
-    --- Returns a JSON-serialized list of last commits for the given project.
-    log: (projectId: string, maxCount: number?) -> string,
-    --- Returns the current git status for the project as a JSON-serialized string, or nil.
-    status: (projectId: string) -> string?,
-}
-
 export type FormFieldOption = {
     id: string,
     label: string,
 }
 
-export type FormField = {
-    id: string,
-    type: "text" | "select",
-    label: string,
-    placeholder: string?,
-    default: string?,
-    options: { FormFieldOption }?,
-}
-
-export type FormOptions = {
-    title: string,
-    fields: { FormField },
-}
-
--- Form field definition
 export type FormField = {
     id: string,
     label: string,
@@ -236,6 +214,8 @@ export type FormOptions = {
     title: string,
     fields: { FormField },
 }
+
+
 
 -- Header widget definition
 export type HeaderWidgetOptions = {

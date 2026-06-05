@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 
 
@@ -21,10 +19,15 @@ type PluginCommandContext = {
 }
 
 local plugin = {
+    lazy = true,
     name = "Community Themes Injector",
     description = "Personalize your Vault experience with gorgeous One Dark, Dracula, Nord, Tokyo Night, and Catppuccin theme presets.",
     version = "1.1.0",
     category = "theme",
+    cmd = { "apply_theme" },
+    commands = {
+        { id = "apply_theme", title = "Apply Community Theme Preset", scope = "global" },
+    },
     options = {
         { id = "mocha", label = "Catppuccin Mocha" },
         { id = "macchiato", label = "Catppuccin Macchiato" },

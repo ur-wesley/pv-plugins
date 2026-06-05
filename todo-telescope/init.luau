@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 type TodoItem = {
 	projectId: string,
@@ -24,6 +22,8 @@ type PluginCommandContext = {
 }
 
 local plugin = {
+	lazy = true,
+	cmd = { "scan_todos" },
 	name = "Todo Telescope",
 	description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 	version = "1.0.0",

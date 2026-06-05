@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 
 
@@ -22,6 +20,8 @@ type PluginCommandContext = {
 }
 
 local plugin = {
+    lazy = true,
+    cmd = { "manage_tools" },
     name = "Mise Tool Manager",
     description = "Seamlessly manage your project's runtimes and tools (Node, Go, Python, etc.) via Mise.",
     version = "1.0.0",

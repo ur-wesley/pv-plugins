@@ -1,7 +1,5 @@
 --!strict
--- require("../vault") resolves vault.luau statically for full type inference.
--- At runtime, Lua returns the pre-loaded vault table from package.loaded (no disk I/O).
-local vault = require("../vault")
+local vault = require("vault")
 
 type PluginCommandContext = {
 	projectId: string?,
@@ -14,6 +12,9 @@ type ProjectStateContext = {
 }
 
 local plugin = {
+	lazy = true,
+	cmd = { "clear_session" },
+	event = { "project_focus", "startup" },
 	name = "Auto Session Manager",
 	description = "Automatically save and restore your last opened file and line number for each project.",
 	version = "1.0.0",
