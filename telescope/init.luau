@@ -1,8 +1,5 @@
 --!strict
 
-local fs = (require :: any)("./lib/fs")
-local projects = (require :: any)("./lib/projects")
-
 type QuickPickItem = {
 	id: string,
 	label: string,
@@ -28,6 +25,23 @@ local function pick_index(options: PickIndexOptions): string?
 	})
 end
 
+local fs_mod: any = nil
+local projects_mod: any = nil
+
+local function fs()
+	if not fs_mod then
+		fs_mod = (require :: any)("./fs")
+	end
+	return fs_mod
+end
+
+local function projects()
+	if not projects_mod then
+		projects_mod = (require :: any)("./projects")
+	end
+	return projects_mod
+end
+
 local plugin = {
 	name = "Picker Library",
 	description = "Shared picker and multi-project scan utilities for dependent plugins.",
@@ -36,8 +50,12 @@ local plugin = {
 	lazy = true,
 	exports = {
 		pick_index = pick_index,
-		list_projects = projects.list_projects,
-		walk_files = fs.walk_files,
+		list_projects = function(...)
+			return projects().list_projects(...)
+		end,
+		walk_files = function(...)
+			return fs().walk_files(...)
+		end,
 	},
 }
 
