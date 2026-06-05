@@ -29,8 +29,8 @@ local function pick_index(options: PickIndexOptions): string?
 end
 
 local plugin = {
-	name = "Telescope",
-	description = "Shared picker and multi-project scan utilities.",
+	name = "Picker Library",
+	description = "Shared picker and multi-project scan utilities for dependent plugins.",
 	version = "1.0.0",
 	category = "library",
 	lazy = true,
