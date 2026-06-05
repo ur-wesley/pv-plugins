@@ -1,15 +1,9 @@
 --!strict
 
-local locales = (require :: any)("./locales")
-local i18n = (require :: any)("./i18n")
-local projects = (require :: any)("./projects")
-local footer = (require :: any)("./footer")
-local header = (require :: any)("./header")
-local commits = (require :: any)("./commits")
-local branches = (require :: any)("./branches")
-local sync = (require :: any)("./sync")
-local decorations = (require :: any)("./decorations")
-local settings = (require :: any)("./settings")
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type PluginCommandContext = {
 	projectId: string?,
@@ -24,7 +18,68 @@ local plugin = {
 	description = "Git integration with commits, branches, sync, header widgets, and file decorations.",
 	version = "2.0.0",
 	category = "utility",
-	locales = locales,
+	locales = {
+		en = {
+			name = "Git",
+			description = "Git integration with commits, branches, sync, header widgets, and file decorations.",
+			["command.view_commits"] = "Git: View Last Commits",
+			["command.switch_branch"] = "Git: Switch Branch",
+			["command.pull"] = "Git: Pull Remote Changes",
+			["command.push"] = "Git: Push Local Changes",
+			["command.show_settings"] = "Git: Configure Settings",
+			pull_success = "Git pull completed successfully!",
+			pull_error = "Git pull failed: {err}",
+			push_success = "Git push completed successfully!",
+			push_error = "Git push failed: {err}",
+			sync_running = "Running git {action}...",
+			no_active_project = "Git: No active project is currently selected.",
+			no_git_repo = "This project is not a Git repository.",
+			error_loading = "Failed to load Git logs.",
+			dirty = "dirty",
+			clean = "clean",
+			status_tooltip = "Branch: {branch} ({state})",
+			dialog_title = "Git Commits — {name}",
+			error_loading_branches = "Failed to load Git branches.",
+			current_branch = "Current Branch",
+			no_branches_found = "No Git branches found.",
+			switch_branch_title = "Select Branch to Checkout",
+			already_on_branch = "Already on branch '{branch}'.",
+			switch_success = "Successfully switched to branch '{branch}'!",
+			switch_error = "Failed to switch to '{branch}': {error}",
+			settings_saved = "Settings saved successfully!",
+			settings_title = "Git Settings",
+		},
+		de = {
+			name = "Git",
+			description = "Git-Integration mit Commits, Branches, Sync, Header-Widgets und Datei-Markierungen.",
+			["command.view_commits"] = "Git: Letzte Commits anzeigen",
+			["command.switch_branch"] = "Git: Branch wechseln",
+			["command.pull"] = "Git: Remote-Änderungen abrufen (Pull)",
+			["command.push"] = "Git: Lokale Änderungen hochladen (Push)",
+			["command.show_settings"] = "Git: Einstellungen konfigurieren",
+			pull_success = "Git Pull erfolgreich abgeschlossen!",
+			pull_error = "Git Pull fehlgeschlagen: {err}",
+			push_success = "Git Push erfolgreich abgeschlossen!",
+			push_error = "Git Push fehlgeschlagen: {err}",
+			sync_running = "Git {action} wird ausgeführt...",
+			no_active_project = "Git: Es ist derzeit kein aktives Projekt ausgewählt.",
+			no_git_repo = "Dieses Projekt ist kein Git-Repository.",
+			error_loading = "Fehler beim Laden der Git-Logs.",
+			dirty = "geändert",
+			clean = "sauber",
+			status_tooltip = "Branch: {branch} ({state})",
+			dialog_title = "Git-Commits — {name}",
+			error_loading_branches = "Fehler beim Laden der Git-Branches.",
+			current_branch = "Aktueller Branch",
+			no_branches_found = "Keine Git-Branches gefunden.",
+			switch_branch_title = "Branch zum Auschecken auswählen",
+			already_on_branch = "Bereits auf Branch '{branch}'.",
+			switch_success = "Erfolgreich zum Branch '{branch}' gewechselt!",
+			switch_error = "Fehler beim Wechseln zu '{branch}': {error}",
+			settings_saved = "Einstellungen erfolgreich gespeichert!",
+			settings_title = "Git-Einstellungen",
+		},
+	},
 	config = {
 		{
 			key = "show_branch",
@@ -64,34 +119,53 @@ local plugin = {
 	},
 }
 
-local translate = i18n.create(locales)
-local t = translate.t
+local modules: { [string]: any } = {}
+
+local function mod(name: string): any
+	if not modules[name] then
+		modules[name] = (require :: any)(`./{name}`)
+	end
+	return modules[name]
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	local locales = plugin.locales :: PluginLocales
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
+	local str = dict[key] or key
+	if args then
+		for k, v in pairs(args) do
+			str = str:gsub("{" .. k .. "}", tostring(v))
+		end
+	end
+	return str
+end
 
 local function sync_header(project_id: string)
-	header.sync(project_id, {
+	mod("header").sync(project_id, {
 		show_header = vault.settings.get("show_header") ~= "false",
 	})
 end
 
 local function on_focus(project_id: string?, locale: string)
-	footer.update(project_id, t, locale)
+	mod("footer").update(project_id, t, locale)
 	if project_id and project_id ~= "" then
 		sync_header(project_id)
 	else
-		header.clear()
+		mod("header").clear()
 	end
 	local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
 	if is_viewing_commits then
-		commits.refresh(project_id, locale, t, false)
+		mod("commits").refresh(project_id, locale, t, false)
 	end
 end
 
 function plugin.get_decorations(project_id: string, tab_id: string, element_ids: { string })
-	return decorations.for_elements(project_id, tab_id, element_ids)
+	return mod("decorations").for_elements(project_id, tab_id, element_ids)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
+	local projects = mod("projects")
 
 	if command_id == "init" or command_id == "project_focus" or command_id == "project_state_changed" then
 		on_focus(projects.resolve_focus_id(context), locale)
@@ -104,8 +178,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 	end
 
 	if command_id == "show_settings" then
-		local project_id = projects.resolve_active_id(context)
-		settings.show(project_id, locale, t)
+		mod("settings").show(projects.resolve_active_id(context), locale, t)
 		return
 	end
 
@@ -116,7 +189,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 		local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
-		branches.switch(project_id, locale, t, is_viewing_commits)
+		mod("branches").switch(project_id, locale, t, is_viewing_commits)
 		return
 	end
 
@@ -127,7 +200,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 		vault.settings.set("is_viewing_commits", "true")
-		commits.refresh(project_id, locale, t, true)
+		mod("commits").refresh(project_id, locale, t, true)
 		return
 	end
 
@@ -138,9 +211,9 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 		if command_id == "pull" then
-			sync.run(project_id, locale, t, { "pull" }, "pull", "pull_success", "pull_error")
+			mod("sync").run(project_id, locale, t, { "pull" }, "pull", "pull_success", "pull_error")
 		else
-			sync.run(project_id, locale, t, { "push" }, "push", "push_success", "push_error")
+			mod("sync").run(project_id, locale, t, { "push" }, "push", "push_success", "push_error")
 		end
 	end
 end
