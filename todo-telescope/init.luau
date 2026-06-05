@@ -1,5 +1,9 @@
 --!strict
-local vault = require("vault")
+
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type TodoItem = {
 	projectId: string,
@@ -8,6 +12,12 @@ type TodoItem = {
 	line: number,
 	text: string,
 	type: string, -- TODO, FIXME, BUG, HACK
+}
+
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
 }
 
 type QuickPickItem = {
@@ -90,9 +100,17 @@ local function is_ignored(name: string): boolean
 end
 
 -- Recursive directory walker
+local function listDir(path: string): { string }?
+	local ok, entries = pcall(vault.fs.list_dir, path)
+	if ok and type(entries) == "table" then
+		return entries :: { string }
+	end
+	return nil
+end
+
 local function scan_folder(project_id: string, project_name: string, dir_path: string, results: { TodoItem })
-	local ok, entries = pcall(vault.fs.list_dir, dir_path)
-	if not ok or not entries then
+	local entries = listDir(dir_path)
+	if not entries then
 		return
 	end
 
@@ -135,9 +153,8 @@ local function scan_folder(project_id: string, project_name: string, dir_path: s
 	end
 end
 
--- Translation helper
-local function t(locale: string, key: string, args: { [string]: string }?): string
-	local dict = plugin.locales[locale] or plugin.locales["en"] or {}
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
 	local str = dict[key] or key
 	if args then
 		for k, v in pairs(args) do
@@ -147,6 +164,20 @@ local function t(locale: string, key: string, args: { [string]: string }?): stri
 	return str
 end
 
+local function parseProjects(raw: string): { VaultProject }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { VaultProject }
+	end
+	return nil
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
+end
+
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
 
@@ -154,8 +185,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 		vault.log.info(t(locale, "scanning_start"))
 
 		-- 1. Fetch all active projects
-		local raw_projects = vault.projects.list()
-		local projects = vault.json.parse(raw_projects)
+		local projects = parseProjects(vault.projects.list())
 
 		if not projects or #projects == 0 then
 			vault.notification.error(t(locale, "no_projects"))
@@ -165,7 +195,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 		-- 2. Traverse and collect bookmarks
 		local results: { TodoItem } = {}
 		for _, p in ipairs(projects) do
-			scan_folder(p.id, p.path, results)
+			scan_folder(p.id, p.name, p.path, results)
 		end
 
 		if #results == 0 then

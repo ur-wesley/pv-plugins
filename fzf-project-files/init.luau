@@ -1,5 +1,9 @@
 --!strict
-local vault = require("vault")
+
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type FileItem = {
 	projectId: string,
@@ -8,11 +12,19 @@ type FileItem = {
 	relativePath: string,
 }
 
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
+
 type QuickPickItem = {
 	id: string,
 	label: string,
 	detail: string?,
 	icon: string?,
+	filePath: string?,
+	lineNumber: number?,
 }
 
 type PluginCommandContext = {
@@ -105,9 +117,17 @@ local function is_ignored(name: string): boolean
 end
 
 -- Recursive folder scanning
+local function listDir(path: string): { string }?
+	local ok, entries = pcall(vault.fs.list_dir, path)
+	if ok and type(entries) == "table" then
+		return entries :: { string }
+	end
+	return nil
+end
+
 local function scan_folder(project_id: string, project_name: string, base_path: string, current_dir: string, results: { FileItem })
-	local ok, entries = pcall(vault.fs.list_dir, current_dir)
-	if not ok or not entries then
+	local entries = listDir(current_dir)
+	if not entries then
 		return
 	end
 
@@ -167,9 +187,8 @@ local function get_icon(path: string): string
 	return extension_icons[ext] or "mdi--file-outline"
 end
 
--- Translation helper
-local function t(locale: string, key: string, args: { [string]: string }?): string
-	local dict = plugin.locales[locale] or plugin.locales["en"] or {}
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
 	local str = dict[key] or key
 	if args then
 		for k, v in pairs(args) do
@@ -179,13 +198,26 @@ local function t(locale: string, key: string, args: { [string]: string }?): stri
 	return str
 end
 
+local function parseProjects(raw: string): { VaultProject }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { VaultProject }
+	end
+	return nil
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
+end
+
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	if command_id == "find_files" then
 		local locale = vault.i18n.get_locale()
 
 		-- 1. Fetch projects
-		local raw_projects = vault.projects.list()
-		local projects = vault.json.parse(raw_projects)
+		local projects = parseProjects(vault.projects.list())
 
 		if not projects or #projects == 0 then
 			vault.ui.show_quick_pick({

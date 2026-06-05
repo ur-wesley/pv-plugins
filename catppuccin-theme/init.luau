@@ -1,7 +1,9 @@
 --!strict
-local vault = require("vault")
 
-
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type PresetItem = {
     label: string,
@@ -323,16 +325,19 @@ local function apply_current_theme()
     vault.theme.inject_css(css)
 end
 
--- Translation helper
-local function t(locale: string, key: string, args: {[string]: string}?): string
-    local dict = plugin.locales[locale] or plugin.locales["en"] or {}
-    local str = dict[key] or key
-    if args then
-        for k, v in pairs(args) do
-            str = str:gsub("{" .. k .. "}", tostring(v))
-        end
-    end
-    return str
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
+	local str = dict[key] or key
+	if args then
+		for k, v in pairs(args) do
+			str = str:gsub("{" .. k .. "}", tostring(v))
+		end
+	end
+	return str
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)

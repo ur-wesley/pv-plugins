@@ -1,5 +1,15 @@
 --!strict
-local vault = require("vault")
+
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
+
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
 
 type PluginCommandContext = {
 	projectId: string?,
@@ -50,9 +60,8 @@ local plugin = {
 local focused_project_id: string? = nil
 local restoring = false
 
--- Translation helper
-local function t(locale: string, key: string, args: { [string]: string }?): string
-	local dict = plugin.locales[locale] or plugin.locales["en"] or {}
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
 	local str = dict[key] or key
 	if args then
 		for k, v in pairs(args) do
@@ -62,11 +71,23 @@ local function t(locale: string, key: string, args: { [string]: string }?): stri
 	return str
 end
 
--- Resolve project name helper
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
+end
+
+local function parseProjects(raw: string): { VaultProject }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { VaultProject }
+	end
+	return nil
+end
+
 local function get_project_name(project_id: string): string
-	local raw = vault.projects.list()
-	local ok, list = pcall(vault.json.parse, raw)
-	if ok and list then
+	local list = parseProjects(vault.projects.list())
+	if list then
 		for _, p in ipairs(list) do
 			if p.id == project_id then
 				return p.name

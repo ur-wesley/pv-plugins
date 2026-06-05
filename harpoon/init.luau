@@ -1,18 +1,26 @@
 --!strict
-local vault = require("vault")
 
-
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type ProjectItem = {
-    id: string,
-    name: string
+	id: string,
+	name: string,
+}
+
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
 }
 
 type QuickPickItem = {
-    id: string,
-    label: string,
-    detail: string?,
-    icon: string?
+	id: string,
+	label: string,
+	detail: string?,
+	icon: string?,
 }
 
 type PluginCommandContext = {
@@ -98,16 +106,29 @@ local plugin = {
     }
 }
 
--- Helpers
-local function t(locale: string, key: string, args: {[string]: string}?): string
-    local dict = plugin.locales[locale] or plugin.locales["en"] or {}
-    local str = dict[key] or key
-    if args then
-        for k, v in pairs(args) do
-            str = str:gsub("{" .. k .. "}", tostring(v))
-        end
-    end
-    return str
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
+	local str = dict[key] or key
+	if args then
+		for k, v in pairs(args) do
+			str = str:gsub("{" .. k .. "}", tostring(v))
+		end
+	end
+	return str
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
+end
+
+local function parseProjects(raw: string): { VaultProject }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { VaultProject }
+	end
+	return nil
 end
 
 -- Get stored list of projects
@@ -116,9 +137,11 @@ local function get_harpooned(): {ProjectItem}
     if not raw or raw == "" then
         return {}
     end
-    local ok, parsed = pcall(vault.json.parse, raw)
-    if ok and parsed then
-        return parsed
+    local ok, parsed = pcall(function()
+        return vault.json.parse(raw)
+    end)
+    if ok and type(parsed) == "table" then
+        return parsed :: { ProjectItem }
     end
     return {}
 end
@@ -176,8 +199,7 @@ end
 
 -- Look up project metadata by ID
 local function get_project_metadata(project_id: string): ProjectItem?
-    local raw_list = vault.projects.list()
-    local list = vault.json.parse(raw_list)
+    local list = parseProjects(vault.projects.list())
     if list then
         for _, p in ipairs(list) do
             if p.id == project_id then

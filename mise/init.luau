@@ -1,7 +1,16 @@
 --!strict
-local vault = require("vault")
 
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
+type VaultQuickPickItem = {
+	id: string,
+	label: string,
+	detail: string?,
+	icon: string?,
+}
 
 type PinnedTool = {
     name: string,
@@ -69,16 +78,19 @@ local plugin = {
     }
 }
 
--- Helpers
-local function t(locale: string, key: string, args: {[string]: string}?): string
-    local dict = plugin.locales[locale] or plugin.locales["en"] or {}
-    local str = dict[key] or key
-    if args then
-        for k, v in pairs(args) do
-            str = str:gsub("{" .. k .. "}", tostring(v))
-        end
-    end
-    return str
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
+	local str = dict[key] or key
+	if args then
+		for k, v in pairs(args) do
+			str = str:gsub("{" .. k .. "}", tostring(v))
+		end
+	end
+	return str
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
@@ -95,8 +107,24 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
         local ok1, raw_tools = pcall(vault.mise.get_tools, project_id)
         local ok2, raw_suggs = pcall(vault.mise.get_suggestions, project_id)
         
-        local tools: {PinnedTool} = ok1 and vault.json.parse(raw_tools) or {}
-        local suggestions: {SuggestedTool} = ok2 and vault.json.parse(raw_suggs) or {}
+        local tools: { PinnedTool } = {}
+        local suggestions: { SuggestedTool } = {}
+        if ok1 then
+            local okParse, parsed = pcall(function()
+                return vault.json.parse(raw_tools)
+            end)
+            if okParse and type(parsed) == "table" then
+                tools = parsed :: { PinnedTool }
+            end
+        end
+        if ok2 then
+            local okParse, parsed = pcall(function()
+                return vault.json.parse(raw_suggs)
+            end)
+            if okParse and type(parsed) == "table" then
+                suggestions = parsed :: { SuggestedTool }
+            end
+        end
         
         if #tools == 0 and #suggestions == 0 then
             vault.ui.show_quick_pick({
@@ -108,7 +136,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
             return
         end
         
-        local items = {}
+        local items: { VaultQuickPickItem } = {}
         
         -- Add Install trigger option at the top if there are pinned tools
         if #tools > 0 then
