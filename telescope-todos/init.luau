@@ -19,6 +19,8 @@ type QuickPickItem = {
 	label: string,
 	detail: string?,
 	icon: string?,
+	filePath: string?,
+	lineNumber: number?,
 }
 
 type PluginCommandContext = {
@@ -32,13 +34,20 @@ type VaultProject = {
 }
 
 type TelescopeExports = {
-	pick_index: (options: { title: string, items: { QuickPickItem } }) -> string?,
+	pick_index: (options: {
+		title: string,
+		items: { QuickPickItem },
+		fuzzy: boolean?,
+		preview: boolean?,
+	}) -> string?,
 	list_projects: () -> { VaultProject }?,
 	walk_files: (
 		project: VaultProject,
 		visitor: (projectId: string, projectName: string, filePath: string, relativePath: string) -> ()
 	) -> (),
 }
+
+local MARKERS = { "TODO", "FIXME", "BUG", "HACK" }
 
 local plugin = {
 	lazy = true,
@@ -49,7 +58,7 @@ local plugin = {
 	},
 	name = "TODO Scanner",
 	description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
-	version = "1.0.1",
+	version = "1.0.2",
 	category = "utility",
 	locales = {
 		en = {
@@ -57,8 +66,13 @@ local plugin = {
 			description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 			["command.scan_todos"] = "Scan Workspaces for TODOs",
 			scanning_start = "Scanning library projects...",
-			no_projects = "No active projects found in library. Add some repositories first.",
-			no_todos = "No TODOs or bookmarks found in your projects.",
+			scanning_msg = "Scanning project: {name}",
+			no_projects_title = "TODO Scanner",
+			no_projects_label = "No projects in library.",
+			no_projects_detail = "Add library locations first.",
+			no_todos_title = "TODO Scanner",
+			no_todos_label = "No TODOs found.",
+			no_todos_detail = "No TODO, FIXME, BUG, or HACK markers found in your projects.",
 			dialog_title = "TODOs ({count} items found)",
 			cancel_msg = "Scan cancelled.",
 		},
@@ -67,8 +81,13 @@ local plugin = {
 			description = "TODOs, FIXMEs, BUGs und HACKs in allen Workspace-Projekten finden und ansteuern.",
 			["command.scan_todos"] = "Workspace nach TODOs durchsuchen",
 			scanning_start = "Scanne Bibliotheks-Projekte...",
-			no_projects = "Keine aktiven Projekte in der Bibliothek gefunden. Fügen Sie zuerst Repositories hinzu.",
-			no_todos = "Keine TODOs oder Lesezeichen in Ihren Projekten gefunden.",
+			scanning_msg = "Scanne Projekt: {name}",
+			no_projects_title = "TODO-Scanner",
+			no_projects_label = "Keine Projekte in der Bibliothek.",
+			no_projects_detail = "Füge zuerst Bibliotheksordner hinzu.",
+			no_todos_title = "TODO-Scanner",
+			no_todos_label = "Keine TODOs gefunden.",
+			no_todos_detail = "Keine TODO-, FIXME-, BUG- oder HACK-Markierungen in deinen Projekten gefunden.",
 			dialog_title = "TODOs ({count} Einträge gefunden)",
 			cancel_msg = "Suche abgebrochen.",
 		},
@@ -87,6 +106,30 @@ local function get_basename(path: string): string
 	return name or path
 end
 
+local function match_marker(line: string): string?
+	local upper = line:upper()
+	for _, marker in ipairs(MARKERS) do
+		local start = 1
+		while true do
+			local s, e = upper:find(marker, start, true)
+			if s == nil or e == nil then
+				break
+			end
+			local prev = if s > 1 then upper:sub(s - 1, s - 1) else ""
+			local next_char = upper:sub(e + 1, e + 1)
+			if prev:match("%w") then
+				start = e + 1
+				continue
+			end
+			if next_char == "" or next_char == ":" or next_char == " " or next_char == "\t" then
+				return marker
+			end
+			start = e + 1
+		end
+	end
+	return nil
+end
+
 local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
 	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
 	local str = dict[key] or key
@@ -103,37 +146,37 @@ local function t(locale: string, key: string, args: { [string]: string }?): stri
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
-	local locale = vault.i18n.get_locale()
-
 	if command_id == "scan_todos" then
 		local telescope = (vault :: any).plugin.require("telescope") :: TelescopeExports
+		local locale = vault.i18n.get_locale()
+
 		vault.log.info(t(locale, "scanning_start"))
 
 		local projects = telescope.list_projects()
 
 		if not projects or #projects == 0 then
-			vault.notification.error(t(locale, "no_projects"))
+			telescope.pick_index({
+				title = t(locale, "no_projects_title"),
+				items = {
+					{
+						id = "no_projects",
+						label = t(locale, "no_projects_label"),
+						detail = t(locale, "no_projects_detail"),
+					},
+				},
+			})
 			return
 		end
 
 		local results: { TodoItem } = {}
 		for _, project in ipairs(projects) do
+			vault.log.info(t(locale, "scanning_msg", { name = project.name }))
 			telescope.walk_files(project, function(projectId, projectName, filePath, _relativePath)
 				local ok, content = pcall(vault.fs.read_file, filePath)
 				if ok and content then
 					local line_no = 1
 					for line in content:gmatch("([^\r\n]*)") do
-						local matched_type = nil
-						if line:find("TODO:") then
-							matched_type = "TODO"
-						elseif line:find("FIXME:") then
-							matched_type = "FIXME"
-						elseif line:find("BUG:") then
-							matched_type = "BUG"
-						elseif line:find("HACK:") then
-							matched_type = "HACK"
-						end
-
+						local matched_type = match_marker(line)
 						if matched_type then
 							table.insert(results, {
 								projectId = projectId,
@@ -151,7 +194,16 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 		end
 
 		if #results == 0 then
-			vault.notification.info(t(locale, "no_todos"))
+			telescope.pick_index({
+				title = t(locale, "no_todos_title"),
+				items = {
+					{
+						id = "no_todos",
+						label = t(locale, "no_todos_label"),
+						detail = t(locale, "no_todos_detail"),
+					},
+				},
+			})
 			return
 		end
 
@@ -171,12 +223,16 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 				label = string.format("[%s] %s:%d", res.type, get_basename(res.path), res.line),
 				detail = string.format("%s » %s", res.projectName, res.text),
 				icon = icon,
+				filePath = res.path,
+				lineNumber = res.line,
 			})
 		end
 
 		local selected = telescope.pick_index({
 			title = t(locale, "dialog_title", { count = tostring(#results) }),
 			items = items,
+			fuzzy = true,
+			preview = true,
 		})
 
 		if selected then
