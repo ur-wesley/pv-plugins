@@ -189,31 +189,50 @@ local function parseGitCommits(raw: string): { GitCommit }?
 	return nil
 end
 
+local function clear_git_footer()
+    pcall(vault.ui.clear_footer, "git-branch")
+end
+
+local function resolve_focus_project_id(context: PluginCommandContext?): string?
+    if context and context.projectId ~= nil then
+        if context.projectId == "" then
+            return nil
+        end
+        return context.projectId
+    end
+    return vault.projects.get_active()
+end
+
 -- Refresh footer git status chip for focused project
 local function update_git_footer(projectId: string?, locale: string)
-    if not projectId or projectId == "" then
-        pcall(vault.ui.clear_footer, "git-branch")
+    local active_project = vault.projects.get_active()
+    if not active_project or active_project == "" then
+        clear_git_footer()
         return
     end
 
-    local active_project = vault.projects.get_active()
+    if not projectId or projectId == "" then
+        projectId = active_project
+    end
+
     if projectId ~= active_project then
+        clear_git_footer()
         return
     end
 
     local ok, raw_status = pcall(vault.git.status, projectId)
     if not ok then
-        pcall(vault.ui.clear_footer, "git-branch")
+        clear_git_footer()
         return
     end
     if not raw_status then
-        pcall(vault.ui.clear_footer, "git-branch")
+        clear_git_footer()
         return
     end
 
     local status = parseGitStatus(raw_status)
     if not status or not status.branch then
-        pcall(vault.ui.clear_footer, "git-branch")
+        clear_git_footer()
         return
     end
 
@@ -231,7 +250,7 @@ local function update_git_footer(projectId: string?, locale: string)
     end
 
     if not show_branch and not show_tag then
-        pcall(vault.ui.clear_footer, "git-branch")
+        clear_git_footer()
         return
     end
 
@@ -367,10 +386,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
     local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
 
     if command_id == "init" or command_id == "project_focus" or command_id == "project_state_changed" then
-        local projectId = context and context.projectId
-        if not projectId or projectId == "" then
-            projectId = vault.projects.get_active()
-        end
+        local projectId = resolve_focus_project_id(context)
         update_git_footer(projectId, locale)
         if is_viewing_commits then
             refresh_commits(projectId, locale, false)
