@@ -1,5 +1,7 @@
 --!strict
 
+local parse = (require :: any)("./parse")
+
 type GitStatus = {
 	branch: string,
 	ahead: number,
@@ -13,46 +15,36 @@ type SyncHeaderOptions = {
 	show_header: boolean?,
 }
 
-local function parseGitStatus(raw: string): GitStatus?
-	local ok, parsed = pcall(function()
-		return vault.json.parse(raw)
-	end)
-	if ok and type(parsed) == "table" then
-		return parsed :: GitStatus
-	end
-	return nil
-end
-
-local function get_git_status(project_id: string): GitStatus?
+local function get_status(project_id: string): GitStatus?
 	local ok, status_json = pcall(vault.git.get_status, project_id)
 	if not ok or not status_json or status_json == "null" or status_json == "" then
 		return nil
 	end
-	local status = parseGitStatus(status_json)
+	local status = parse.status(status_json)
 	if status and status.branch then
 		return status
 	end
 	return nil
 end
 
-local function clear_header()
+local function clear()
 	vault.ui.clear_header_widget("git_branch")
 	vault.ui.clear_header_widget("git_status_badge")
 end
 
-local function sync_header(project_id: string, options: SyncHeaderOptions?)
+local function sync(project_id: string, options: SyncHeaderOptions?)
 	local show_header = true
 	if options and options.show_header ~= nil then
 		show_header = options.show_header
 	end
 	if not show_header then
-		clear_header()
+		clear()
 		return
 	end
 
-	local status = get_git_status(project_id)
+	local status = get_status(project_id)
 	if not status then
-		clear_header()
+		clear()
 		return
 	end
 
@@ -85,12 +77,13 @@ local function sync_header(project_id: string, options: SyncHeaderOptions?)
 		text = status.isDirty and "Dirty" or "Clean",
 		icon = status.isDirty and "mdi--alert-circle" or "mdi--check-circle",
 		color = status.isDirty and "warning" or "success",
-		tooltip = status.isDirty and "Working directory has uncommitted changes" or "Working tree is clean.\nClick to open settings.",
+		tooltip = status.isDirty and "Working directory has uncommitted changes"
+			or "Working tree is clean.\nClick to open settings.",
 		command = "show_settings",
 	})
 end
 
 return {
-	sync_header = sync_header,
-	clear_header = clear_header,
+	sync = sync,
+	clear = clear,
 }

@@ -8,6 +8,5 @@ return {
   { id = "fzf-project-files", dir = "fzf-project-files" },
   { id = "todo-telescope", dir = "todo-telescope" },
   { id = "auto-session-manager", dir = "auto-session-manager" },
-  { id = "git-integration", dir = "git-integration" },
-  { id = "git-enrichment", dir = "git-enrichment" },
+  { id = "git", dir = "git" },
 }
