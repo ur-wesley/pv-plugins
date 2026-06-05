@@ -57,7 +57,7 @@ type VaultQuickPickItem = {
 local plugin = {
     lazy = true,
     cmd = { "view_commits", "switch_branch", "pull", "push" },
-    event = { "project_focus" },
+    event = { "project_focus", "git_status_changed" },
     name = "Git Integration",
     description = "View repository commits and track status directly inside your launcher.",
     version = "1.0.1",
@@ -388,6 +388,16 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
     if command_id == "init" or command_id == "project_focus" or command_id == "project_state_changed" then
         local projectId = resolve_focus_project_id(context)
         update_git_footer(projectId, locale)
+        if is_viewing_commits then
+            refresh_commits(projectId, locale, false)
+        end
+        return
+    elseif command_id == "git_status_changed" then
+        local projectId = resolve_focus_project_id(context)
+        update_git_footer(projectId, locale)
+        if projectId and projectId ~= "" then
+            git_header().sync_header(projectId)
+        end
         if is_viewing_commits then
             refresh_commits(projectId, locale, false)
         end
