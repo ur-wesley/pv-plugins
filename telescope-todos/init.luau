@@ -43,7 +43,10 @@ type TelescopeExports = {
 local plugin = {
 	lazy = true,
 	cmd = { "scan_todos" },
-	dependencies = { "telescope" },
+	dependencies = {
+		"telescope",
+		{ id = "telescope", repo = "https://github.com/ur-wesley/pv-plugins", dir = "telescope" },
+	},
 	name = "TODO Scanner",
 	description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 	version = "1.0.1",

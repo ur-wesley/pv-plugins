@@ -41,7 +41,10 @@ type TelescopeExports = {
 local plugin = {
 	lazy = true,
 	cmd = { "search_all" },
-	dependencies = { "telescope" },
+	dependencies = {
+		"telescope",
+		{ id = "telescope", repo = "https://github.com/ur-wesley/pv-plugins", dir = "telescope" },
+	},
 	name = "Live Grep",
 	description = "Search text across all files in all library projects.",
 	version = "1.0.1",

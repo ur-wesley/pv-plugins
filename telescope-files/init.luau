@@ -48,7 +48,10 @@ type TelescopeExports = {
 local plugin = {
 	lazy = true,
 	cmd = { "find_files" },
-	dependencies = { "telescope" },
+	dependencies = {
+		"telescope",
+		{ id = "telescope", repo = "https://github.com/ur-wesley/pv-plugins", dir = "telescope" },
+	},
 	name = "Find Files",
 	description = "Fuzzy-find files across all projects in the library.",
 	version = "1.0.2",
