@@ -13,7 +13,7 @@ type PluginCommandContext = {
 local plugin = {
 	lazy = true,
 	cmd = { "view_commits", "switch_branch", "pull", "push", "show_settings" },
-	event = { "project_focus" },
+	event = { "project_focus", "startup" },
 	name = "Git",
 	description = "Git integration with commits, branches, sync, header widgets, and file decorations.",
 	version = "2.0.0",
@@ -119,13 +119,69 @@ local plugin = {
 	},
 }
 
-local modules: { [string]: any } = {}
+local projects_mod: any = nil
+local footer_mod: any = nil
+local header_mod: any = nil
+local commits_mod: any = nil
+local branches_mod: any = nil
+local sync_mod: any = nil
+local decorations_mod: any = nil
+local settings_mod: any = nil
 
-local function mod(name: string): any
-	if not modules[name] then
-		modules[name] = (require :: any)(`./{name}`)
+local function projects()
+	if not projects_mod then
+		projects_mod = (require :: any)("./projects")
 	end
-	return modules[name]
+	return projects_mod
+end
+
+local function footer()
+	if not footer_mod then
+		footer_mod = (require :: any)("./footer")
+	end
+	return footer_mod
+end
+
+local function header()
+	if not header_mod then
+		header_mod = (require :: any)("./header")
+	end
+	return header_mod
+end
+
+local function commits()
+	if not commits_mod then
+		commits_mod = (require :: any)("./commits")
+	end
+	return commits_mod
+end
+
+local function branches()
+	if not branches_mod then
+		branches_mod = (require :: any)("./branches")
+	end
+	return branches_mod
+end
+
+local function sync()
+	if not sync_mod then
+		sync_mod = (require :: any)("./sync")
+	end
+	return sync_mod
+end
+
+local function decorations()
+	if not decorations_mod then
+		decorations_mod = (require :: any)("./decorations")
+	end
+	return decorations_mod
+end
+
+local function settings()
+	if not settings_mod then
+		settings_mod = (require :: any)("./settings")
+	end
+	return settings_mod
 end
 
 local function t(locale: string, key: string, args: { [string]: string }?): string
@@ -141,34 +197,34 @@ local function t(locale: string, key: string, args: { [string]: string }?): stri
 end
 
 local function sync_header(project_id: string)
-	mod("header").sync(project_id, {
+	header().sync(project_id, {
 		show_header = vault.settings.get("show_header") ~= "false",
 	})
 end
 
 local function on_focus(project_id: string?, locale: string)
-	mod("footer").update(project_id, t, locale)
+	footer().update(project_id, t, locale)
 	if project_id and project_id ~= "" then
 		sync_header(project_id)
 	else
-		mod("header").clear()
+		header().clear()
 	end
 	local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
 	if is_viewing_commits then
-		mod("commits").refresh(project_id, locale, t, false)
+		commits().refresh(project_id, locale, t, false)
 	end
 end
 
 function plugin.get_decorations(project_id: string, tab_id: string, element_ids: { string })
-	return mod("decorations").for_elements(project_id, tab_id, element_ids)
+	return decorations().for_elements(project_id, tab_id, element_ids)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
-	local projects = mod("projects")
+	local projects_api = projects()
 
-	if command_id == "init" or command_id == "project_focus" or command_id == "project_state_changed" then
-		on_focus(projects.resolve_focus_id(context), locale)
+	if command_id == "init" or command_id == "startup" or command_id == "project_focus" or command_id == "project_state_changed" then
+		on_focus(projects_api.resolve_focus_id(context), locale)
 		return
 	end
 
@@ -178,42 +234,42 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 	end
 
 	if command_id == "show_settings" then
-		mod("settings").show(projects.resolve_active_id(context), locale, t)
+		settings().show(projects_api.resolve_active_id(context), locale, t)
 		return
 	end
 
 	if command_id == "switch_branch" then
-		local project_id = projects.resolve_active_id(context)
+		local project_id = projects_api.resolve_active_id(context)
 		if not project_id or project_id == "" then
 			vault.notification.error(t(locale, "no_active_project"))
 			return
 		end
 		local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
-		mod("branches").switch(project_id, locale, t, is_viewing_commits)
+		branches().switch(project_id, locale, t, is_viewing_commits)
 		return
 	end
 
 	if command_id == "view_commits" then
-		local project_id = projects.resolve_active_id(context)
+		local project_id = projects_api.resolve_active_id(context)
 		if not project_id or project_id == "" then
 			vault.notification.error(t(locale, "no_active_project"))
 			return
 		end
 		vault.settings.set("is_viewing_commits", "true")
-		mod("commits").refresh(project_id, locale, t, true)
+		commits().refresh(project_id, locale, t, true)
 		return
 	end
 
 	if command_id == "pull" or command_id == "push" then
-		local project_id = projects.resolve_active_id(context)
+		local project_id = projects_api.resolve_active_id(context)
 		if not project_id or project_id == "" then
 			vault.notification.error(t(locale, "no_active_project"))
 			return
 		end
 		if command_id == "pull" then
-			mod("sync").run(project_id, locale, t, { "pull" }, "pull", "pull_success", "pull_error")
+			sync().run(project_id, locale, t, { "pull" }, "pull", "pull_success", "pull_error")
 		else
-			mod("sync").run(project_id, locale, t, { "push" }, "push", "push_success", "push_error")
+			sync().run(project_id, locale, t, { "push" }, "push", "push_success", "push_error")
 		end
 	end
 end
