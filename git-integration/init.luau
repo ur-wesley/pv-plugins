@@ -1,5 +1,23 @@
 --!strict
-local vault = require("vault")
+
+type GitHeaderModule = {
+	sync_header: (string, { show_header: boolean? }?) -> (),
+	clear_header: () -> (),
+}
+
+local git_header_cache: GitHeaderModule? = nil
+
+local function git_header(): GitHeaderModule
+	if not git_header_cache then
+		git_header_cache = (require :: any)("../git-shared/header") :: GitHeaderModule
+	end
+	return git_header_cache :: GitHeaderModule
+end
+
+type PluginLocales = {
+	en: { [string]: string },
+	de: { [string]: string },
+}
 
 type PluginCommandContext = {
     projectId: string?
@@ -23,12 +41,26 @@ type GitStatus = {
     version: string?,
 }
 
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
+
+type VaultQuickPickItem = {
+	id: string,
+	label: string,
+	detail: string?,
+	icon: string?,
+}
+
 local plugin = {
     lazy = true,
-    cmd = { "view_commits", "switch_branch" },
+    cmd = { "view_commits", "switch_branch", "pull", "push" },
+    event = { "project_focus" },
     name = "Git Integration",
     description = "View repository commits and track status directly inside your launcher.",
-    version = "1.0.0",
+    version = "1.0.1",
     category = "utility",
     locales = {
         en = {
@@ -36,7 +68,13 @@ local plugin = {
             description = "View repository commits and track status directly inside your launcher.",
             ["command.view_commits"] = "Git: View Last Commits",
             ["command.switch_branch"] = "Git: Switch Branch",
-            
+            ["command.pull"] = "Git: Pull Remote Changes",
+            ["command.push"] = "Git: Push Local Changes",
+            pull_success = "Git pull completed successfully!",
+            pull_error = "Git pull failed: {err}",
+            push_success = "Git push completed successfully!",
+            push_error = "Git push failed: {err}",
+            sync_running = "Running git {action}...",
             no_active_project = "Git: No active project is currently selected.",
             no_git_repo = "This project is not a Git repository.",
             error_loading = "Failed to load Git logs.",
@@ -58,7 +96,13 @@ local plugin = {
             description = "Repository-Commits anzeigen und Status direkt im Launcher verfolgen.",
             ["command.view_commits"] = "Git: Letzte Commits anzeigen",
             ["command.switch_branch"] = "Git: Branch wechseln",
-            
+            ["command.pull"] = "Git: Remote-Änderungen abrufen (Pull)",
+            ["command.push"] = "Git: Lokale Änderungen hochladen (Push)",
+            pull_success = "Git Pull erfolgreich abgeschlossen!",
+            pull_error = "Git Pull fehlgeschlagen: {err}",
+            push_success = "Git Push erfolgreich abgeschlossen!",
+            push_error = "Git Push fehlgeschlagen: {err}",
+            sync_running = "Git {action} wird ausgeführt...",
             no_active_project = "Git: Es ist derzeit kein aktives Projekt ausgewählt.",
             no_git_repo = "Dieses Projekt ist kein Git-Repository.",
             error_loading = "Fehler beim Laden der Git-Logs.",
@@ -94,20 +138,55 @@ local plugin = {
     },
     commands = {
         { id = "view_commits", title = "Git: View Last Commits", scope = "project" },
-        { id = "switch_branch", title = "Git: Switch Branch", scope = "project" }
+        { id = "switch_branch", title = "Git: Switch Branch", scope = "project" },
+        { id = "pull", title = "Git: Pull Remote Changes", scope = "global" },
+        { id = "push", title = "Git: Push Local Changes", scope = "global" },
     }
 }
 
--- Helpers
-local function t(locale: string, key: string, args: {[string]: string}?): string
-    local dict = plugin.locales[locale] or plugin.locales["en"] or {}
-    local str = dict[key] or key
-    if args then
-        for k, v in pairs(args) do
-            str = str:gsub("{" .. k .. "}", tostring(v))
-        end
-    end
-    return str
+local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
+	local dict: { [string]: string } = if locale == "de" then locales.de else locales.en
+	local str = dict[key] or key
+	if args then
+		for k, v in pairs(args) do
+			str = str:gsub("{" .. k .. "}", tostring(v))
+		end
+	end
+	return str
+end
+
+local function t(locale: string, key: string, args: { [string]: string }?): string
+	return translate(plugin.locales :: PluginLocales, locale, key, args)
+end
+
+local function parseProjects(raw: string): { VaultProject }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { VaultProject }
+	end
+	return nil
+end
+
+local function parseGitStatus(raw: string): GitStatus?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: GitStatus
+	end
+	return nil
+end
+
+local function parseGitCommits(raw: string): { GitCommit }?
+	local ok, parsed = pcall(function()
+		return vault.json.parse(raw)
+	end)
+	if ok and type(parsed) == "table" then
+		return parsed :: { GitCommit }
+	end
+	return nil
 end
 
 -- Refresh footer git status chip for focused project
@@ -132,7 +211,7 @@ local function update_git_footer(projectId: string?, locale: string)
         return
     end
 
-    local status: GitStatus = vault.json.parse(raw_status)
+    local status = parseGitStatus(raw_status)
     if not status or not status.branch then
         pcall(vault.ui.clear_footer, "git-branch")
         return
@@ -199,6 +278,31 @@ local function update_git_footer(projectId: string?, locale: string)
     })
 end
 
+local function publish_git_changed(project_id: string)
+    local payload = vault.json.stringify({ projectId = project_id, changeType = "git" })
+    vault.event.publish("project:changed", payload)
+end
+
+local function run_git_sync(
+    project_id: string,
+    locale: string,
+    args: { string },
+    action: string,
+    success_key: string,
+    error_key: string
+)
+    vault.notification.info(t(locale, "sync_running", { action = action }))
+    local res = vault.git.run(project_id, args)
+    if res.success then
+        vault.notification.success(t(locale, success_key))
+        update_git_footer(project_id, locale)
+        git_header().sync_header(project_id)
+        publish_git_changed(project_id)
+    else
+        vault.notification.error(t(locale, error_key, { err = res.stderr or "Unknown error" }))
+    end
+end
+
 -- Render and display/refresh commits dialog modal
 local function refresh_commits(projectId: string?, locale: string, showWarnings: boolean)
     if not projectId or projectId == "" then
@@ -213,7 +317,7 @@ local function refresh_commits(projectId: string?, locale: string, showWarnings:
         return
     end
 
-    local commits: {GitCommit} = vault.json.parse(raw_log)
+    local commits = parseGitCommits(raw_log)
     if not commits or #commits == 0 then
         if showWarnings then
             vault.notification.info(t(locale, "no_git_repo"))
@@ -222,10 +326,9 @@ local function refresh_commits(projectId: string?, locale: string, showWarnings:
     end
 
     -- Retrieve project name
-    local raw_projects = vault.projects.list()
-    local projects = vault.json.parse(raw_projects)
+    local projects = parseProjects(vault.projects.list())
     local project_name = "Repository"
-    for _, p in ipairs(projects) do
+    for _, p in ipairs(projects or {}) do
         if p.id == projectId then
             project_name = p.name
             break
@@ -289,13 +392,14 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
         end
 
         -- Find project path
-        local raw_projects = vault.projects.list()
-        local projects = vault.json.parse(raw_projects)
-        local project = nil
-        for _, p in ipairs(projects) do
-            if p.id == projectId then
-                project = p
-                break
+        local projects = parseProjects(vault.projects.list())
+        local project: VaultProject? = nil
+        if projects then
+            for _, p in ipairs(projects) do
+                if p.id == projectId then
+                    project = p
+                    break
+                end
             end
         end
 
@@ -314,13 +418,13 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
         local status_ok, raw_status = pcall(vault.git.status, projectId)
         local current_branch = nil
         if status_ok and raw_status then
-            local status = vault.json.parse(raw_status)
+            local status = parseGitStatus(raw_status)
             if status then
                 current_branch = status.branch
             end
         end
 
-        local items = {}
+        local items: { VaultQuickPickItem } = {}
         for line in res.stdout:gmatch("[^\r\n]+") do
             local branch_name = line:match("^%s*(.-)%s*$")
             if branch_name and branch_name ~= "" then
@@ -382,6 +486,24 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 
         vault.settings.set("is_viewing_commits", "true")
         refresh_commits(projectId, locale, true)
+        return
+    end
+
+    if command_id == "pull" or command_id == "push" then
+        local projectId = context and context.projectId
+        if not projectId or projectId == "" then
+            projectId = vault.projects.get_active()
+        end
+        if not projectId or projectId == "" then
+            vault.notification.error(t(locale, "no_active_project"))
+            return
+        end
+
+        if command_id == "pull" then
+            run_git_sync(projectId, locale, { "pull" }, "pull", "pull_success", "pull_error")
+        else
+            run_git_sync(projectId, locale, { "push" }, "push", "push_success", "push_error")
+        end
     end
 end
 
