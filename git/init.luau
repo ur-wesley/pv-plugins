@@ -44,10 +44,10 @@ type VaultQuickPickItem = {
 local plugin = {
 	lazy = false,
 	cmd = { "view_commits", "switch_branch", "pull", "push", "show_settings" },
-	event = { "project_focus" },
+	event = { "project_focus", "git_status_changed" },
 	name = "Git",
 	description = "Git integration with commits, branches, sync, header widgets, and file decorations.",
-	version = "2.0.1",
+	version = "2.0.2",
 	category = "utility",
 	locales = {
 		en = {
@@ -243,7 +243,7 @@ local function clear_git_header()
 	vault.ui.clear_header_widget("git_status_badge")
 end
 
-local function get_header_status(project_id: string): GitStatus?
+local function get_git_status(project_id: string): GitStatus?
 	local ok, status_json = pcall(vault.git.get_status, project_id)
 	if not ok or not status_json or status_json == "null" or status_json == "" then
 		return nil
@@ -267,7 +267,7 @@ local function sync_git_header(project_id: string, show_header: boolean?)
 		return
 	end
 
-	local status = get_header_status(project_id)
+	local status = get_git_status(project_id)
 	if not status then
 		clear_git_header()
 		return
@@ -324,14 +324,8 @@ local function update_git_footer(project_id: string?, locale: string)
 		return
 	end
 
-	local ok, raw_status = pcall(vault.git.status, project_id)
-	if not ok or not raw_status then
-		clear_git_footer()
-		return
-	end
-
-	local status = parse_git_status(raw_status)
-	if not status or not status.branch then
+	local status = get_git_status(project_id)
+	if not status then
 		clear_git_footer()
 		return
 	end
@@ -603,8 +597,14 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
 	local is_viewing_commits = vault.settings.get("is_viewing_commits") == "true"
 
-	if command_id == "init" or command_id == "project_focus" or command_id == "project_state_changed" then
-		local project_id = resolve_focus_project_id(context)
+	if command_id == "init"
+		or command_id == "project_focus"
+		or command_id == "project_state_changed"
+		or command_id == "git_status_changed"
+	then
+		local project_id = if command_id == "git_status_changed"
+			then resolve_active_project_id(context)
+			else resolve_focus_project_id(context)
 		refresh_git_ui(project_id, locale)
 		if is_viewing_commits then
 			refresh_commits(project_id, locale, false)
@@ -642,12 +642,9 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 		end
 
 		local current_branch: string? = nil
-		local status_ok, raw_status = pcall(vault.git.status, project_id)
-		if status_ok and raw_status then
-			local status = parse_git_status(raw_status)
-			if status then
-				current_branch = status.branch
-			end
+		local status = get_git_status(project_id)
+		if status then
+			current_branch = status.branch
 		end
 
 		local items: { VaultQuickPickItem } = {}
