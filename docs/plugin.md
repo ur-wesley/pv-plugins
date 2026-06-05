@@ -48,7 +48,9 @@ Lazy-loading hooks (usually on `init.luau`, not in the registry):
 | `cmd` | Command ids that load the plugin when invoked |
 | `event` | App events (`startup`, `project_focus`, …) that load the plugin |
 | `keys` | Keybinding ids that load the plugin |
-| `dependencies` | Other plugin ids that must load first |
+| `dependencies` | Other plugin ids (or `{ id, repo, dir }` tables) that must load first |
+| `externals` | Git-pinned Luau libraries in `plugins/vendor/` (string id or `{ id, repo, main }`) |
+| `exports` | Public API table for library plugins (`category = "library"`) |
 
 ## Where files live on disk
 
@@ -130,10 +132,43 @@ Reference implementations live in [`pv-plugins/`](https://github.com/ur-wesley/p
 1. Add your plugin folder and an entry to `plugins.registry.luau` (monorepo) or ship a single root `init.luau`.
 2. Open a PR to [ur-wesley/pv-plugins](https://github.com/ur-wesley/pv-plugins), or host your own repo and share the Git URL / deep link.
 
+## Plugin and external dependencies
+
+### Depending on another plugin
+
+```lua
+dependencies = {
+  "telescope",
+  { id = "telescope", repo = "https://github.com/ur-wesley/pv-plugins", dir = "telescope" },
+}
+
+local telescope = vault.plugin.require("telescope")
+telescope.pick_index({ title = "Pick one", items = { ... } })
+```
+
+Missing repos with a `repo` field are **auto-installed** on enable. Use `category = "library"` and an `exports` table to ship reusable plugins (see `pv-plugins/telescope/`).
+
+### External Git libraries
+
+```lua
+externals = {
+  { id = "fuse", repo = "https://github.com/you/luau-fuse", main = "src/init.luau" },
+}
+
+local fuse = vault.external.require("fuse")
+```
+
+Checkouts live under `plugins/vendor/<id>/`. Pins are stored in auto-generated `vendor-lock.luau` (sync/restore in Settings → Plugins).
+
+### Local modules
+
+Place helpers in `lib/` and use `require("./lib/module")` — no registry entry needed.
+
 ## Do not edit
 
 - **`plugins/vault.luau`** — regenerated on each app start.
 - **`plugins/.cache/`** — bytecode cache; safe to delete.
+- **`plugins/vendor-lock.luau`** — auto-generated external dependency pins.
 
 ## Lockfile
 

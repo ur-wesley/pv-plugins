@@ -11,13 +11,7 @@ type TodoItem = {
 	path: string,
 	line: number,
 	text: string,
-	type: string, -- TODO, FIXME, BUG, HACK
-}
-
-type VaultProject = {
-	id: string,
-	name: string,
-	path: string,
+	type: string,
 }
 
 type QuickPickItem = {
@@ -31,9 +25,25 @@ type PluginCommandContext = {
 	projectId: string?,
 }
 
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
+
+type TelescopeExports = {
+	pick_index: (options: { title: string, items: { QuickPickItem } }) -> string?,
+	list_projects: () -> { VaultProject }?,
+	walk_files: (
+		project: VaultProject,
+		visitor: (projectId: string, projectName: string, filePath: string, relativePath: string) -> ()
+	) -> (),
+}
+
 local plugin = {
 	lazy = true,
 	cmd = { "scan_todos" },
+	dependencies = { "telescope" },
 	name = "Telescope",
 	description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 	version = "1.0.0",
@@ -69,84 +79,9 @@ local plugin = {
 	},
 }
 
--- Basename helper
 local function get_basename(path: string): string
 	local name = path:match("([^/\\]+)$")
 	return name or path
-end
-
--- Ignored folders to keep the search highly performant
-local ignored_dirs: { [string]: boolean } = {
-	["node_modules"] = true,
-	[".git"] = true,
-	["target"] = true,
-	["dist"] = true,
-	[".next"] = true,
-	["build"] = true,
-	["bin"] = true,
-	["obj"] = true,
-	[".svelte-kit"] = true,
-	[".nuxt"] = true,
-	[".turbo"] = true,
-	["vendor"] = true,
-}
-
-local function is_ignored(name: string): boolean
-	return ignored_dirs[name] == true
-end
-
--- Recursive directory walker
-local function listDir(path: string): { string }?
-	local ok, entries = pcall(vault.fs.list_dir, path)
-	if ok and type(entries) == "table" then
-		return entries :: { string }
-	end
-	return nil
-end
-
-local function scan_folder(project_id: string, project_name: string, dir_path: string, results: { TodoItem })
-	local entries = listDir(dir_path)
-	if not entries then
-		return
-	end
-
-	for _, entry_path in ipairs(entries) do
-		local name = get_basename(entry_path)
-		if vault.fs.is_dir(entry_path) then
-			if not is_ignored(name) then
-				scan_folder(project_id, project_name, entry_path, results)
-			end
-		elseif vault.fs.is_file(entry_path) then
-			local ok2, content = pcall(vault.fs.read_file, entry_path)
-			if ok2 and content then
-				local line_no = 1
-				for line in content:gmatch("([^\r\n]*)") do
-					local matched_type = nil
-					if line:find("TODO:") then
-						matched_type = "TODO"
-					elseif line:find("FIXME:") then
-						matched_type = "FIXME"
-					elseif line:find("BUG:") then
-						matched_type = "BUG"
-					elseif line:find("HACK:") then
-						matched_type = "HACK"
-					end
-
-					if matched_type then
-						table.insert(results, {
-							projectId = project_id,
-							projectName = project_name,
-							path = entry_path,
-							line = line_no,
-							text = line:gsub("^%s+", ""),
-							type = matched_type,
-						})
-					end
-					line_no = line_no + 1
-				end
-			end
-		end
-	end
 end
 
 local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
@@ -160,16 +95,6 @@ local function translate(locales: PluginLocales, locale: string, key: string, ar
 	return str
 end
 
-local function parseProjects(raw: string): { VaultProject }?
-	local ok, parsed = pcall(function()
-		return vault.json.parse(raw)
-	end)
-	if ok and type(parsed) == "table" then
-		return parsed :: { VaultProject }
-	end
-	return nil
-end
-
 local function t(locale: string, key: string, args: { [string]: string }?): string
 	return translate(plugin.locales :: PluginLocales, locale, key, args)
 end
@@ -178,20 +103,48 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
 
 	if command_id == "scan_todos" then
+		local telescope = (vault :: any).plugin.require("telescope") :: TelescopeExports
 		vault.log.info(t(locale, "scanning_start"))
 
-		-- 1. Fetch all active projects
-		local projects = parseProjects(vault.projects.list())
+		local projects = telescope.list_projects()
 
 		if not projects or #projects == 0 then
 			vault.notification.error(t(locale, "no_projects"))
 			return
 		end
 
-		-- 2. Traverse and collect bookmarks
 		local results: { TodoItem } = {}
-		for _, p in ipairs(projects) do
-			scan_folder(p.id, p.name, p.path, results)
+		for _, project in ipairs(projects) do
+			telescope.walk_files(project, function(projectId, projectName, filePath, _relativePath)
+				local ok, content = pcall(vault.fs.read_file, filePath)
+				if ok and content then
+					local line_no = 1
+					for line in content:gmatch("([^\r\n]*)") do
+						local matched_type = nil
+						if line:find("TODO:") then
+							matched_type = "TODO"
+						elseif line:find("FIXME:") then
+							matched_type = "FIXME"
+						elseif line:find("BUG:") then
+							matched_type = "BUG"
+						elseif line:find("HACK:") then
+							matched_type = "HACK"
+						end
+
+						if matched_type then
+							table.insert(results, {
+								projectId = projectId,
+								projectName = projectName,
+								path = filePath,
+								line = line_no,
+								text = line:gsub("^%s+", ""),
+								type = matched_type,
+							})
+						end
+						line_no = line_no + 1
+					end
+				end
+			end)
 		end
 
 		if #results == 0 then
@@ -199,7 +152,6 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 
-		-- 3. Prepare searchable list
 		local items: { QuickPickItem } = {}
 		for i, res in ipairs(results) do
 			local icon = "mdi--bookmark-outline"
@@ -219,8 +171,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			})
 		end
 
-		-- 4. Display quick pick
-		local selected = vault.ui.show_quick_pick({
+		local selected = telescope.pick_index({
 			title = t(locale, "dialog_title", { count = tostring(#results) }),
 			items = items,
 		})

@@ -12,12 +12,6 @@ type SearchResult = {
 	text: string,
 }
 
-type VaultProject = {
-	id: string,
-	name: string,
-	path: string,
-}
-
 type QuickPickItem = {
 	id: string,
 	label: string,
@@ -29,9 +23,25 @@ type PluginCommandContext = {
 	projectId: string?,
 }
 
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
+
+type TelescopeExports = {
+	pick_index: (options: { title: string, items: { QuickPickItem } }) -> string?,
+	list_projects: () -> { VaultProject }?,
+	walk_files: (
+		project: VaultProject,
+		visitor: (projectId: string, projectName: string, filePath: string, relativePath: string) -> ()
+	) -> (),
+}
+
 local plugin = {
 	lazy = true,
 	cmd = { "search_all" },
+	dependencies = { "telescope" },
 	name = "Telescope",
 	description = "Live-grep across all files in all library projects.",
 	version = "1.0.0",
@@ -81,71 +91,9 @@ local plugin = {
 	},
 }
 
--- Basename helper
 local function get_basename(path: string): string
 	local name = path:match("([^/\\]+)$")
 	return name or path
-end
-
--- Ignored folders to keep search fast and resource-efficient
-local ignored_dirs: { [string]: boolean } = {
-	["node_modules"] = true,
-	[".git"] = true,
-	["target"] = true,
-	["dist"] = true,
-	[".next"] = true,
-	["build"] = true,
-	["bin"] = true,
-	["obj"] = true,
-}
-
-local function is_ignored(name: string): boolean
-	return ignored_dirs[name] == true
-end
-
--- Recursive search walker
-local function listDir(path: string): { string }?
-	local ok, entries = pcall(vault.fs.list_dir, path)
-	if ok and type(entries) == "table" then
-		return entries :: { string }
-	end
-	return nil
-end
-
-local function search_folder(project_id: string, dir_path: string, query: string, results: { SearchResult })
-	local entries = listDir(dir_path)
-	if not entries then
-		return
-	end
-
-	for _, entry_path in ipairs(entries) do
-		local name = get_basename(entry_path)
-		if vault.fs.is_dir(entry_path) then
-			if not is_ignored(name) then
-				search_folder(project_id, entry_path, query, results)
-			end
-		elseif vault.fs.is_file(entry_path) then
-			local ok2, content = pcall(vault.fs.read_file, entry_path)
-			if ok2 and content then
-				local lower_content = content:lower()
-				local lower_query = query:lower()
-				if lower_content:find(lower_query, 1, true) then
-					local line_no = 1
-					for line in content:gmatch("([^\r\n]*)") do
-						if line:lower():find(lower_query, 1, true) then
-							table.insert(results, {
-								projectId = project_id,
-								path = entry_path,
-								line = line_no,
-								text = line:gsub("^%s+", ""),
-							})
-						end
-						line_no = line_no + 1
-					end
-				end
-			end
-		end
-	end
 end
 
 local function translate(locales: PluginLocales, locale: string, key: string, args: { [string]: string }?): string
@@ -159,25 +107,15 @@ local function translate(locales: PluginLocales, locale: string, key: string, ar
 	return str
 end
 
-local function parseProjects(raw: string): { VaultProject }?
-	local ok, parsed = pcall(function()
-		return vault.json.parse(raw)
-	end)
-	if ok and type(parsed) == "table" then
-		return parsed :: { VaultProject }
-	end
-	return nil
-end
-
 local function t(locale: string, key: string, args: { [string]: string }?): string
 	return translate(plugin.locales :: PluginLocales, locale, key, args)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	if command_id == "search_all" then
+		local telescope = (vault :: any).plugin.require("telescope") :: TelescopeExports
 		local locale = vault.i18n.get_locale()
 
-		-- 1. Ask user for query
 		local query = vault.ui.show_input_box({
 			title = t(locale, "dialog_title"),
 			placeholder = t(locale, "dialog_placeholder"),
@@ -190,11 +128,10 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 
 		vault.log.info(t(locale, "searching_msg", { query = query }))
 
-		-- 2. Fetch projects
-		local projects = parseProjects(vault.projects.list())
+		local projects = telescope.list_projects()
 
 		if not projects or #projects == 0 then
-			vault.ui.show_quick_pick({
+			telescope.pick_index({
 				title = t(locale, "no_projects_title"),
 				items = {
 					{
@@ -207,16 +144,34 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 
-		-- 3. Search folders
+		local lower_query = query:lower()
 		local results: { SearchResult } = {}
 		for _, project in ipairs(projects) do
 			vault.log.info(t(locale, "scanning_msg", { name = project.name, path = project.path }))
-			search_folder(project.id, project.path, query, results)
+			telescope.walk_files(project, function(projectId, _projectName, filePath, _relativePath)
+				local ok, content = pcall(vault.fs.read_file, filePath)
+				if ok and content then
+					local lower_content = content:lower()
+					if lower_content:find(lower_query, 1, true) then
+						local line_no = 1
+						for line in content:gmatch("([^\r\n]*)") do
+							if line:lower():find(lower_query, 1, true) then
+								table.insert(results, {
+									projectId = projectId,
+									path = filePath,
+									line = line_no,
+									text = line:gsub("^%s+", ""),
+								})
+							end
+							line_no = line_no + 1
+						end
+					end
+				end
+			end)
 		end
 
-		-- 4. Display results
 		if #results == 0 then
-			vault.ui.show_quick_pick({
+			telescope.pick_index({
 				title = t(locale, "no_matches_title", { query = query }),
 				items = {
 					{
@@ -239,7 +194,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			})
 		end
 
-		local selected = vault.ui.show_quick_pick({
+		local selected = telescope.pick_index({
 			title = t(locale, "results_title", { query = query, count = tostring(#results) }),
 			items = items,
 		})

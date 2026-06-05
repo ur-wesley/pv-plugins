@@ -117,7 +117,13 @@ Build custom style overrides:
 Retrieve active application language options for localized dialogue rendering:
 * **`vault.i18n.get_locale() -> string`**: Asynchronously retrieves the active UI locale setting (e.g., `"en"`, `"de"`).
 
-### 2.8 UI Primitives (`vault.ui`)
+### 2.8 Plugin dependencies (`vault.plugin`, `vault.external`)
+
+* **`vault.plugin.require(pluginId: string) -> table`**: Returns another plugin's `exports` table. The dependency must be listed in your `dependencies` array.
+* **`vault.external.require(externalId: string) -> table`**: Loads a Git-pinned library from `plugins/vendor/`. Must be listed in `externals`.
+* **`require("@plugin/<id>")`**, **`require("@external/<id>")`**, **`require("./lib/foo")`**: Lower-level module paths resolved by the runtime searcher.
+
+### 2.9 UI Primitives (`vault.ui`)
 Request interaction with the user:
 * **`vault.ui.show_input_box(options: table) -> string | nil`**: Prompts the user with an input box.
   * *Options table structure*: `{ title = string, placeholder = string }`

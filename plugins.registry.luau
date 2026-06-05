@@ -4,6 +4,7 @@ return {
   { id = "community-themes", dir = "community-themes" },
   { id = "harpoon", dir = "harpoon" },
   { id = "mise", dir = "mise" },
+  { id = "telescope", dir = "telescope" },
   { id = "telescope-grep", dir = "telescope-grep" },
   { id = "telescope-files", dir = "telescope-files" },
   { id = "telescope-todos", dir = "telescope-todos" },

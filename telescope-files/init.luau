@@ -12,12 +12,6 @@ type FileItem = {
 	relativePath: string,
 }
 
-type VaultProject = {
-	id: string,
-	name: string,
-	path: string,
-}
-
 type QuickPickItem = {
 	id: string,
 	label: string,
@@ -31,9 +25,30 @@ type PluginCommandContext = {
 	projectId: string?,
 }
 
+type VaultProject = {
+	id: string,
+	name: string,
+	path: string,
+}
+
+type TelescopeExports = {
+	pick_index: (options: {
+		title: string,
+		items: { QuickPickItem },
+		fuzzy: boolean?,
+		preview: boolean?,
+	}) -> string?,
+	list_projects: () -> { VaultProject }?,
+	walk_files: (
+		project: VaultProject,
+		visitor: (projectId: string, projectName: string, filePath: string, relativePath: string) -> ()
+	) -> (),
+}
+
 local plugin = {
 	lazy = true,
 	cmd = { "find_files" },
+	dependencies = { "telescope" },
 	name = "Telescope",
 	description = "Fuzzy-find files across all projects in the library.",
 	version = "1.0.1",
@@ -85,81 +100,15 @@ local plugin = {
 	},
 }
 
--- Basename helper
 local function get_basename(path: string): string
 	local name = path:match("([^/\\]+)$")
 	return name or path
 end
 
--- Extension helper
 local function get_extension(path: string): string
 	return path:match("%.([^%.]+)$") or ""
 end
 
--- Ignored folders to keep search fast and resource-efficient
-local ignored_dirs: { [string]: boolean } = {
-	["node_modules"] = true,
-	[".git"] = true,
-	["target"] = true,
-	["dist"] = true,
-	[".next"] = true,
-	["build"] = true,
-	["bin"] = true,
-	["obj"] = true,
-	[".svelte-kit"] = true,
-	[".nuxt"] = true,
-	[".turbo"] = true,
-	["vendor"] = true,
-}
-
-local function is_ignored(name: string): boolean
-	return ignored_dirs[name] == true
-end
-
--- Recursive folder scanning
-local function listDir(path: string): { string }?
-	local ok, entries = pcall(vault.fs.list_dir, path)
-	if ok and type(entries) == "table" then
-		return entries :: { string }
-	end
-	return nil
-end
-
-local function scan_folder(project_id: string, project_name: string, base_path: string, current_dir: string, results: { FileItem })
-	local entries = listDir(current_dir)
-	if not entries then
-		return
-	end
-
-	for _, entry_path in ipairs(entries) do
-		local name = get_basename(entry_path)
-		if vault.fs.is_dir(entry_path) then
-			if not is_ignored(name) then
-				scan_folder(project_id, project_name, base_path, entry_path, results)
-			end
-		elseif vault.fs.is_file(entry_path) then
-			-- Calculate relative path
-			local rel_path = entry_path
-			if entry_path:sub(1, #base_path) == base_path then
-				rel_path = entry_path:sub(#base_path + 1)
-				-- Strip leading slash/backslash
-				if rel_path:sub(1, 1) == "/" or rel_path:sub(1, 1) == "\\" then
-					rel_path = rel_path:sub(2)
-				end
-			end
-			rel_path = rel_path:gsub("\\", "/")
-
-			table.insert(results, {
-				projectId = project_id,
-				projectName = project_name,
-				path = entry_path,
-				relativePath = rel_path,
-			})
-		end
-	end
-end
-
--- Extension-to-icon mapping for premium aesthetics
 local extension_icons: { [string]: string } = {
 	rs = "mdi--language-rust",
 	js = "mdi--language-javascript",
@@ -198,29 +147,19 @@ local function translate(locales: PluginLocales, locale: string, key: string, ar
 	return str
 end
 
-local function parseProjects(raw: string): { VaultProject }?
-	local ok, parsed = pcall(function()
-		return vault.json.parse(raw)
-	end)
-	if ok and type(parsed) == "table" then
-		return parsed :: { VaultProject }
-	end
-	return nil
-end
-
 local function t(locale: string, key: string, args: { [string]: string }?): string
 	return translate(plugin.locales :: PluginLocales, locale, key, args)
 end
 
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	if command_id == "find_files" then
+		local telescope = (vault :: any).plugin.require("telescope") :: TelescopeExports
 		local locale = vault.i18n.get_locale()
 
-		-- 1. Fetch projects
-		local projects = parseProjects(vault.projects.list())
+		local projects = telescope.list_projects()
 
 		if not projects or #projects == 0 then
-			vault.ui.show_quick_pick({
+			telescope.pick_index({
 				title = t(locale, "no_projects_title"),
 				items = {
 					{
@@ -233,15 +172,21 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 
-		-- 2. Scan folders
 		local results: { FileItem } = {}
 		for _, project in ipairs(projects) do
 			vault.log.info(t(locale, "scanning_msg", { name = project.name }))
-			scan_folder(project.id, project.name, project.path, project.path, results)
+			telescope.walk_files(project, function(projectId, projectName, filePath, relativePath)
+				table.insert(results, {
+					projectId = projectId,
+					projectName = projectName,
+					path = filePath,
+					relativePath = relativePath,
+				})
+			end)
 		end
 
 		if #results == 0 then
-			vault.ui.show_quick_pick({
+			telescope.pick_index({
 				title = t(locale, "no_files_title"),
 				items = {
 					{
@@ -254,7 +199,6 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			return
 		end
 
-		-- 3. Prepare QuickPick options with file path and line numbers
 		local items: { QuickPickItem } = {}
 		for i, res in ipairs(results) do
 			table.insert(items, {
@@ -267,7 +211,7 @@ function plugin.execute(command_id: string, context: PluginCommandContext?)
 			})
 		end
 
-		local selected = vault.ui.show_quick_pick({
+		local selected = telescope.pick_index({
 			title = t(locale, "dialog_title"),
 			items = items,
 			fuzzy = true,
