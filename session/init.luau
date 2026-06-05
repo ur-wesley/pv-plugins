@@ -25,22 +25,22 @@ local plugin = {
 	lazy = true,
 	cmd = { "clear_session" },
 	event = { "project_focus", "startup" },
-	name = "Auto Session Manager",
-	description = "Automatically save and restore your last opened file and line number for each project.",
+	name = "Sessions",
+	description = "Save and restore the last opened file and line number for each project.",
 	version = "1.0.0",
 	category = "utility",
 	locales = {
 		en = {
-			name = "Auto Session Manager",
-			description = "Automatically save and restore your last opened file and line number for each project.",
+			name = "Sessions",
+			description = "Save and restore the last opened file and line number for each project.",
 			["command.clear_session"] = "Sessions: Clear Saved Session for Current Project",
 			
 			session_cleared = "Session history cleared for project '{name}'.",
 			no_active_project = "No active project is focused to clear session.",
 		},
 		de = {
-			name = "Auto-Sitzungs-Manager",
-			description = "Automatisches Speichern und Wiederherstellen der zuletzt geöffneten Datei und Zeilennummer für jedes Projekt.",
+			name = "Sitzungen",
+			description = "Zuletzt geöffnete Datei und Zeilennummer pro Projekt speichern und wiederherstellen.",
 			["command.clear_session"] = "Sitzungen: Gespeicherte Sitzung für aktuelles Projekt löschen",
 			
 			session_cleared = "Sitzungsverlauf für Projekt '{name}' gelöscht.",
@@ -114,10 +114,10 @@ local function restore_session(project_id: string)
 		end
 		local line = tonumber(line_str) or 1
 
-		vault.log.info("Auto Session: Restoring open file '" .. file_path .. "' at line " .. tostring(line))
+		vault.log.info("Sessions: Restoring open file '" .. file_path .. "' at line " .. tostring(line))
 		pcall(vault.ui.open_project_file, project_id, file_path, line)
 	elseif tab and tab ~= "" then
-		vault.log.info("Auto Session: Restoring active tab '" .. tab .. "'")
+		vault.log.info("Sessions: Restoring active tab '" .. tab .. "'")
 		pcall(vault.ui.open_project_file, project_id, "", 0)
 	end
 

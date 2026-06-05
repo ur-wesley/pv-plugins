@@ -22,13 +22,13 @@ type PluginCommandContext = {
 
 local plugin = {
     lazy = true,
-    name = "Community Themes Injector",
-    description = "Personalize your Vault experience with gorgeous One Dark, Dracula, Nord, Tokyo Night, and Catppuccin theme presets.",
+    name = "Community Themes",
+    description = "Personalize your Vault experience with One Dark, Dracula, Nord, Tokyo Night, and Catppuccin theme presets.",
     version = "1.1.0",
     category = "theme",
     cmd = { "apply_theme" },
     commands = {
-        { id = "apply_theme", title = "Apply Community Theme Preset", scope = "global" },
+        { id = "apply_theme", title = "Community Themes: Apply Preset", scope = "global" },
     },
     options = {
         { id = "mocha", label = "Catppuccin Mocha" },
@@ -51,17 +51,17 @@ local plugin = {
     },
     locales = {
         en = {
-            name = "Community Themes Injector",
-            description = "Personalize your Vault experience with gorgeous One Dark, Dracula, Nord, Tokyo Night, and Catppuccin theme presets.",
-            ["command.apply_theme"] = "Apply Community Theme Preset",
+            name = "Community Themes",
+            description = "Personalize your Vault experience with One Dark, Dracula, Nord, Tokyo Night, and Catppuccin theme presets.",
+            ["command.apply_theme"] = "Community Themes: Apply Preset",
             dialog_title = "Select a Theme Flavor",
             success_msg = "Applied {flavor} theme preset successfully!",
             cancel_msg = "Theme selection cancelled."
         },
         de = {
-            name = "Community-Themes",
-            description = "Personalisieren Sie Ihr Vault-Erlebnis mit wunderschönen Designs wie One Dark, Dracula, Nord, Tokyo Night und Catppuccin.",
-            ["command.apply_theme"] = "Community-Design-Vorlage anwenden",
+            name = "Community Themes",
+            description = "Personalisieren Sie Ihr Vault-Erlebnis mit One Dark, Dracula, Nord, Tokyo Night und Catppuccin.",
+            ["command.apply_theme"] = "Community Themes: Design-Vorlage anwenden",
             dialog_title = "Wählen Sie ein Design-Preset",
             success_msg = "Design-Preset '{flavor}' erfolgreich angewendet!",
             cancel_msg = "Design-Auswahl abgebrochen."

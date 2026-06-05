@@ -34,33 +34,29 @@ type PluginCommandContext = {
 local plugin = {
 	lazy = true,
 	cmd = { "scan_todos" },
-	name = "Todo Telescope",
+	name = "Telescope",
 	description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 	version = "1.0.0",
 	category = "utility",
 	locales = {
 		en = {
-			name = "Todo Telescope",
+			name = "Telescope",
 			description = "Find and navigate to TODOs, FIXMEs, BUGs, and HACKs across all workspace projects.",
 			["command.scan_todos"] = "Telescope: Search Workspaces for TODOs",
-			
-			-- Dialogue and notification keys
 			scanning_start = "Scanning library projects...",
 			no_projects = "No active projects found in library. Add some repositories first.",
 			no_todos = "No TODOs or bookmarks found in your projects.",
-			dialog_title = "Todo Telescope ({count} items found)",
+			dialog_title = "Telescope: TODOs ({count} items found)",
 			cancel_msg = "Scan cancelled.",
 		},
 		de = {
-			name = "Todo-Teleskop",
-			description = "Suchen und navigieren Sie zu TODOs, FIXMEs, BUGs und HACKs in allen Workspace-Projekten.",
+			name = "Teleskop",
+			description = "TODOs, FIXMEs, BUGs und HACKs in allen Workspace-Projekten finden und ansteuern.",
 			["command.scan_todos"] = "Teleskop: Workspace nach TODOs durchsuchen",
-			
-			-- Dialogue and notification keys
 			scanning_start = "Scanne Bibliotheks-Projekte...",
 			no_projects = "Keine aktiven Projekte in der Bibliothek gefunden. Fügen Sie zuerst Repositories hinzu.",
 			no_todos = "Keine TODOs oder Lesezeichen in Ihren Projekten gefunden.",
-			dialog_title = "Todo-Teleskop ({count} Einträge gefunden)",
+			dialog_title = "Teleskop: TODOs ({count} Einträge gefunden)",
 			cancel_msg = "Suche abgebrochen.",
 		},
 	},

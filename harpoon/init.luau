@@ -28,8 +28,8 @@ type PluginCommandContext = {
 }
 
 local plugin = {
-    name = "Project Harpoon",
-    description = "Supercharge your project navigation! Mark up to 4 projects and jump between them instantly.",
+    name = "Harpoon",
+    description = "Mark up to 4 projects and jump between them instantly.",
     version = "1.0.0",
     category = "utility",
     lazy = true,
@@ -37,8 +37,8 @@ local plugin = {
     event = { "project_focus", "startup" },
     locales = {
         en = {
-            name = "Project Harpoon",
-            description = "Supercharge your project navigation! Mark up to 4 projects and jump between them instantly.",
+            name = "Harpoon",
+            description = "Mark up to 4 projects and jump between them instantly.",
             ["command.mark_project"] = "Harpoon: Mark Current Project",
             ["command.quick_menu"] = "Harpoon: Show Quick Menu",
             ["command.jump_1"] = "Harpoon: Jump to Project 1",
@@ -58,8 +58,8 @@ local plugin = {
             jump_success = "Jumped to slot {slot}: '{name}'"
         },
         de = {
-            name = "Projekt-Harpoon",
-            description = "Maximieren Sie Ihre Projektnavigation! Markieren Sie bis zu 4 Projekte und springen Sie sofort zwischen ihnen hin und her.",
+            name = "Harpoon",
+            description = "Markieren Sie bis zu 4 Projekte und springen Sie sofort zwischen ihnen hin und her.",
             ["command.mark_project"] = "Harpoon: Aktuelles Projekt markieren",
             ["command.quick_menu"] = "Harpoon: Schnellmenü anzeigen",
             ["command.jump_1"] = "Harpoon: Zu Projekt 1 springen",
@@ -91,7 +91,7 @@ local plugin = {
             key = "show_in_footer",
             type = "boolean",
             label = "Show in Footer",
-            description = "If enabled, shows the Project Harpoon slots and anchor in the status bar footer.",
+            description = "If enabled, shows Harpoon slots and anchor in the status bar footer.",
             default = true
         }
     },
