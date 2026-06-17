@@ -10,4 +10,5 @@ return {
   { id = "telescope-todos", dir = "telescope-todos" },
   { id = "session", dir = "session" },
   { id = "git", dir = "git" },
+  { id = "git-hygiene", dir = "git-hygiene" },
 }
