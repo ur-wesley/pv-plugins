@@ -1,18 +1,11 @@
 --!strict
 
-local types = (require :: any)("./types")
-local locales = (require :: any)("./locales")
-local i18n_mod = (require :: any)("./i18n")
-local scan = (require :: any)("./scan")
-local footer = (require :: any)("./footer")
-local picker = (require :: any)("./picker")
-local settings = (require :: any)("./settings")
-
-type PluginCommandContext = types.PluginCommandContext
-type ProjectStatus = types.ProjectStatus
-
-local i18n = i18n_mod.create(locales)
-local t = i18n.t
+type PluginCommandContext = {
+	projectId: string?,
+	elementId: string?,
+	pageId: string?,
+	itemId: string?,
+}
 
 local plugin = {
 	lazy = false,
@@ -31,7 +24,62 @@ local plugin = {
 			command = "show_dirty",
 		},
 	},
-	locales = locales,
+	locales = {
+		en = {
+			name = "Git Hygiene",
+			description = "Scan every project in the vault for uncommitted changes, unpushed commits, and missing upstreams.",
+			["command.show_dirty"] = "Git Hygiene: Show Dirty & Unpushed Projects",
+			["command.refresh_scan"] = "Git Hygiene: Refresh Scan",
+			["command.show_settings"] = "Git Hygiene: Settings",
+			no_projects = "No projects in the vault to scan.",
+			no_issues = "All clean! No dirty or unpushed projects.",
+			scan_done = "Scanned {n} project(s): {dirty} dirty, {unpushed} unpushed, {no_upstream} no-upstream.",
+			scan_partial = "Scanned {n} project(s) with {errors} error(s) skipped.",
+			scanning = "Scanning {n} project(s) for git issues...",
+			settings_title = "Git Hygiene Settings",
+			settings_saved = "Settings saved.",
+			picker_title = "Git Hygiene — {n} project(s) need attention",
+			picker_title_empty = "Git Hygiene — all clean",
+			section_dirty = "Dirty",
+			section_unpushed = "Unpushed",
+			section_no_upstream = "No Upstream",
+			section_behind = "Behind",
+			detail_dirty = "Working directory has uncommitted changes",
+			detail_unpushed = "{n} commit(s) ahead of {branch}",
+			detail_no_upstream = "Local branch with no upstream tracking",
+			detail_behind = "{n} commit(s) behind {branch}",
+			footer_clean = "All clean",
+			footer_summary = "{dirty} dirty · {unpushed} unpushed",
+			footer_summary_full = "{dirty} dirty · {unpushed} unpushed · {no_upstream} no upstream · {behind} behind",
+		},
+		de = {
+			name = "Git-Hygiene",
+			description = "Durchsucht alle Projekte im Vault nach ungespeicherten Änderungen, nicht gepushten Commits und fehlenden Upstreams.",
+			["command.show_dirty"] = "Git-Hygiene: Dirty- und Unpushed-Projekte anzeigen",
+			["command.refresh_scan"] = "Git-Hygiene: Scan aktualisieren",
+			["command.show_settings"] = "Git-Hygiene: Einstellungen",
+			no_projects = "Keine Projekte im Vault zum Scannen.",
+			no_issues = "Alles sauber! Keine dirty oder unpushed Projekte.",
+			scan_done = "{n} Projekt(e) gescannt: {dirty} dirty, {unpushed} unpushed, {no_upstream} ohne Upstream.",
+			scan_partial = "{n} Projekt(e) gescannt, {errors} Fehler übersprungen.",
+			scanning = "Scanne {n} Projekt(e) auf Git-Probleme...",
+			settings_title = "Git-Hygiene-Einstellungen",
+			settings_saved = "Einstellungen gespeichert.",
+			picker_title = "Git-Hygiene — {n} Projekt(e) benötigen Aufmerksamkeit",
+			picker_title_empty = "Git-Hygiene — alles sauber",
+			section_dirty = "Dirty",
+			section_unpushed = "Unpushed",
+			section_no_upstream = "Kein Upstream",
+			section_behind = "Hinter Remote",
+			detail_dirty = "Arbeitsverzeichnis hat ungespeicherte Änderungen",
+			detail_unpushed = "{n} Commit(s) vor {branch}",
+			detail_no_upstream = "Lokaler Branch ohne Upstream-Tracking",
+			detail_behind = "{n} Commit(s) hinter {branch}",
+			footer_clean = "Alles sauber",
+			footer_summary = "{dirty} dirty · {unpushed} unpushed",
+			footer_summary_full = "{dirty} dirty · {unpushed} unpushed · {no_upstream} ohne Upstream · {behind} hinter",
+		},
+	},
 	config = {
 		{
 			key = "track_dirty",
@@ -103,8 +151,55 @@ local plugin = {
 	},
 }
 
+local scan_mod: any = nil
+local footer_mod: any = nil
+local picker_mod: any = nil
+local settings_mod: any = nil
+local i18n_mod: any = nil
+
+local function get_scan()
+	if not scan_mod then
+		scan_mod = (require :: any)("./scan")
+	end
+	return scan_mod
+end
+
+local function get_footer()
+	if not footer_mod then
+		footer_mod = (require :: any)("./footer")
+	end
+	return footer_mod
+end
+
+local function get_picker()
+	if not picker_mod then
+		picker_mod = (require :: any)("./picker")
+	end
+	return picker_mod
+end
+
+local function get_settings()
+	if not settings_mod then
+		settings_mod = (require :: any)("./settings")
+	end
+	return settings_mod
+end
+
+local function get_i18n()
+	if not i18n_mod then
+		local factory = (require :: any)("./i18n")
+		i18n_mod = factory.create(plugin.locales)
+	end
+	return i18n_mod
+end
+
 function plugin.execute(command_id: string, context: PluginCommandContext?)
 	local locale = vault.i18n.get_locale()
+	local t = get_i18n().t
+	local scan = get_scan()
+	local footer = get_footer()
+	local picker = get_picker()
+	local settings = get_settings()
 
 	if command_id == "init" then
 		local cache = scan.load_cache() or {}
